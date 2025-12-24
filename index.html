@@ -15,21 +15,12 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;900&display=swap" rel="stylesheet">
     
-    <!-- React & Babel for In-Browser Transpilation -->
+    <!-- React & Babel -->
     <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 
-    <style>
-        body { font-family: 'Inter', sans-serif; background-color: #050505; color: #fff; margin: 0; overscroll-behavior-y: contain; }
-        .glass { background: rgba(255, 255, 255, 0.03); backdrop-filter: blur(12px); border: 1px solid rgba(255, 255, 255, 0.08); }
-        .metric-glow { box-shadow: 0 0 40px rgba(37, 99, 235, 0.15); }
-        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
-        .pulse { animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite; }
-        .custom-scroll::-webkit-scrollbar { width: 3px; }
-        .custom-scroll::-webkit-scrollbar-thumb { background: #333; border-radius: 10px; }
-    </style>
-<script type="importmap">
+    <script type="importmap">
 {
   "imports": {
     "@google/genai": "https://esm.sh/@google/genai@^1.34.0",
@@ -38,77 +29,133 @@
   }
 }
 </script>
+
+    <style>
+        body { font-family: 'Inter', sans-serif; background-color: #050505; color: #fff; margin: 0; overscroll-behavior-y: contain; }
+        .glass { background: rgba(255, 255, 255, 0.03); backdrop-filter: blur(14px); border: 1px solid rgba(255, 255, 255, 0.08); }
+        .metric-glow { box-shadow: 0 0 40px rgba(37, 99, 235, 0.2); }
+        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
+        .pulse { animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite; }
+        .custom-scroll::-webkit-scrollbar { width: 3px; }
+        .custom-scroll::-webkit-scrollbar-thumb { background: #333; border-radius: 10px; }
+        
+        @keyframes shimmer { 0% { background-position: -200% 0; } 100% { background-position: 200% 0; } }
+        .shimmer {
+            background: linear-gradient(90deg, rgba(255,255,255,0.02) 25%, rgba(255,255,255,0.08) 50%, rgba(255,255,255,0.02) 75%);
+            background-size: 200% 100%;
+            animation: shimmer 2s infinite linear;
+        }
+        .ai-border { border: 1px solid rgba(59, 130, 246, 0.3); background: linear-gradient(145deg, rgba(255,255,255,0.03), rgba(37, 99, 235, 0.05)); }
+    </style>
 </head>
 <body>
     <div id="root"></div>
 
-    <script type="text/babel">
+    <script type="text/babel" data-type="module">
+        import { GoogleGenAI } from "@google/genai";
+
         const { useState, useEffect, useCallback, useRef } = React;
 
         // --- COMPONENTS ---
-        const MetricCard = ({ label, value, unit, icon, color, trend }) => (
-            <div className={`glass p-5 rounded-3xl border-l-4 ${color} transition-all active:scale-95`}>
+        const MetricCard = ({ label, value, unit, icon, color, isLoading }) => (
+            <div className={`glass p-5 rounded-[2rem] border-l-4 ${color} transition-all active:scale-95 ${isLoading ? 'shimmer' : ''}`}>
                 <div className="flex justify-between items-start mb-4">
                     <span className="text-gray-500 text-[10px] font-black uppercase tracking-widest">{label}</span>
                     <i className={`fa-solid ${icon} text-lg opacity-40`}></i>
                 </div>
                 <div className="flex items-baseline gap-1">
-                    <span className="text-3xl font-black tracking-tighter">{value}</span>
-                    <span className="text-gray-500 text-[10px] font-bold uppercase">{unit}</span>
+                    {isLoading ? (
+                        <div className="h-8 w-16 bg-white/10 rounded-lg animate-pulse"></div>
+                    ) : (
+                        <>
+                            <span className="text-3xl font-black tracking-tighter">{value}</span>
+                            <span className="text-gray-500 text-[10px] font-bold uppercase">{unit}</span>
+                        </>
+                    )}
                 </div>
-                {trend && (
-                    <div className="mt-2 text-[10px] font-bold text-green-500 flex items-center gap-1">
-                        <i className="fa-solid fa-arrow-trend-up"></i>
-                        <span>OPTIMAL</span>
-                    </div>
-                )}
             </div>
         );
 
         // --- APP ---
         const App = () => {
             const [metrics, setMetrics] = useState({
-                heartRate: 72,
-                spO2: 98,
-                steps: 8432,
-                stress: 24,
-                sleep: 7.2,
-                timestamp: new Date().toLocaleTimeString()
+                heartRate: 0, spO2: 0, steps: 0, stress: 0, sleep: 0, timestamp: '--'
             });
+            const [isInitialLoading, setIsInitialLoading] = useState(true);
             const [isLive, setIsLive] = useState(true);
             const [status, setStatus] = useState('IDLE');
+            const [aiInsight, setAiInsight] = useState("Your Galaxy Watch 7 is calibrating LTE sensors. Tap 'Push Data' for a deep AI health analysis.");
+            const [isAiGenerating, setIsAiGenerating] = useState(false);
             const [deferredPrompt, setDeferredPrompt] = useState(null);
 
-            // Simulation logic
+            // SIMULATED HARDWARE BRIDGE
+            const fetchWatchData = useCallback(async () => {
+                setIsInitialLoading(true);
+                setStatus('SYNCING');
+                await new Promise(r => setTimeout(r, 1800));
+                
+                setMetrics({
+                    heartRate: 65 + Math.floor(Math.random() * 15),
+                    spO2: 97 + Math.floor(Math.random() * 3),
+                    steps: 4200 + Math.floor(Math.random() * 1000),
+                    stress: 20 + Math.floor(Math.random() * 20),
+                    sleep: (7 + Math.random()).toFixed(1),
+                    timestamp: new Date().toLocaleTimeString()
+                });
+                setIsInitialLoading(false);
+                setStatus('IDLE');
+            }, []);
+
+            useEffect(() => { fetchWatchData(); }, [fetchWatchData]);
+
+            // Real-time Updates
             useEffect(() => {
-                if (!isLive) return;
+                if (!isLive || isInitialLoading) return;
                 const timer = setInterval(() => {
                     setMetrics(prev => ({
                         ...prev,
-                        heartRate: 60 + Math.floor(Math.random() * 25),
-                        stress: Math.max(10, Math.min(90, prev.stress + (Math.random() - 0.5) * 4)),
+                        heartRate: Math.max(60, Math.min(100, prev.heartRate + (Math.random() - 0.5) * 4)),
                         timestamp: new Date().toLocaleTimeString()
                     }));
-                }, 3000);
+                }, 5000);
                 return () => clearInterval(timer);
-            }, [isLive]);
+            }, [isLive, isInitialLoading]);
 
-            // PWA Installation handling
+            // AI Insight Logic
+            const generateAIInsight = async (currentMetrics) => {
+                setIsAiGenerating(true);
+                try {
+                    const ai = new GoogleGenAI({ apiKey: window.process?.env?.API_KEY || "" });
+                    const response = await ai.models.generateContent({
+                        model: "gemini-3-flash-preview",
+                        contents: `Analyze these Galaxy Watch 7 metrics: ${JSON.stringify(currentMetrics)}. 
+                        Provide one short, encouraging health insight (max 120 characters).`,
+                    });
+                    setAiInsight(response.text || "Metrics processed. Recovery is trending positive.");
+                } catch (err) {
+                    console.error("AI Error:", err);
+                    setAiInsight("Push complete. Your metrics are within healthy operational ranges.");
+                } finally {
+                    setIsAiGenerating(false);
+                }
+            };
+
+            const handlePush = async () => {
+                setStatus('PUSHING');
+                await new Promise(r => setTimeout(r, 1200));
+                setStatus('ANALYZING');
+                await generateAIInsight(metrics);
+                setStatus('SUCCESS');
+                setTimeout(() => setStatus('IDLE'), 2000);
+            };
+
+            // PWA Setup
             useEffect(() => {
                 window.addEventListener('beforeinstallprompt', (e) => {
                     e.preventDefault();
                     setDeferredPrompt(e);
                 });
             }, []);
-
-            const handlePush = async () => {
-                setStatus('SYNCING');
-                await new Promise(r => setTimeout(r, 1500));
-                setStatus('ANALYZING');
-                await new Promise(r => setTimeout(r, 1000));
-                setStatus('SUCCESS');
-                setTimeout(() => setStatus('IDLE'), 2000);
-            };
 
             const installApp = async () => {
                 if (!deferredPrompt) return;
@@ -118,101 +165,118 @@
             };
 
             return (
-                <div className="min-h-screen flex flex-col max-w-md mx-auto relative overflow-hidden">
-                    {/* Header */}
-                    <header className="p-6 flex items-center justify-between sticky top-0 bg-black/60 backdrop-blur-2xl z-50 border-b border-white/5">
+                <div className="min-h-screen flex flex-col max-w-md mx-auto bg-[#050505] relative overflow-hidden">
+                    {/* Status Bar Backdrop */}
+                    <div className="h-6 w-full fixed top-0 bg-black/80 backdrop-blur-md z-[60]"></div>
+
+                    <header className="p-6 mt-6 flex items-center justify-between sticky top-6 bg-black/40 backdrop-blur-2xl z-50 border-b border-white/5">
                         <div className="flex items-center gap-3">
                             <div className="w-10 h-10 bg-blue-600 rounded-2xl flex items-center justify-center metric-glow">
-                                <i className="fa-solid fa-bolt-lightning text-white"></i>
+                                <i className="fa-solid fa-bolt-lightning text-white text-lg"></i>
                             </div>
                             <div>
-                                <h1 className="text-lg font-black tracking-tighter">HealthBridge</h1>
+                                <h1 className="text-xl font-black tracking-tighter">HealthBridge</h1>
                                 <div className="flex items-center gap-1.5">
-                                    <div className="w-1.5 h-1.5 bg-green-500 rounded-full pulse"></div>
-                                    <span className="text-[9px] font-bold text-gray-500 uppercase tracking-widest">LTE Connected</span>
+                                    <div className={`w-1.5 h-1.5 rounded-full pulse ${isInitialLoading ? 'bg-amber-500' : 'bg-green-500'}`}></div>
+                                    <span className="text-[10px] font-black text-gray-500 uppercase tracking-widest">
+                                        {isInitialLoading ? 'Connecting...' : 'LTE: Samsung GW7'}
+                                    </span>
                                 </div>
                             </div>
                         </div>
                     </header>
 
-                    {/* Main Content */}
-                    <main className="flex-1 p-5 space-y-4 pb-32 overflow-y-auto custom-scroll">
+                    <main className="flex-1 p-5 space-y-4 pb-36 overflow-y-auto custom-scroll">
                         <div className="grid grid-cols-2 gap-3">
-                            <MetricCard label="Heart" value={metrics.heartRate} unit="BPM" icon="fa-heart-pulse" color="border-red-500" trend />
-                            <MetricCard label="Oxygen" value={metrics.spO2} unit="%" icon="fa-droplet" color="border-blue-400" />
-                            <MetricCard label="Activity" value={metrics.steps.toLocaleString()} unit="Steps" icon="fa-fire" color="border-orange-500" />
-                            <MetricCard label="Stress" value={Math.round(metrics.stress)} unit="/100" icon="fa-brain" color="border-cyan-500" />
+                            <MetricCard label="Heart Rate" value={Math.round(metrics.heartRate)} unit="BPM" icon="fa-heart-pulse" color="border-rose-500" isLoading={isInitialLoading} />
+                            <MetricCard label="SpO2" value={metrics.spO2} unit="%" icon="fa-droplet" color="border-cyan-400" isLoading={isInitialLoading} />
+                            <MetricCard label="Daily Steps" value={metrics.steps.toLocaleString()} unit="Steps" icon="fa-fire-flame-curved" color="border-orange-500" isLoading={isInitialLoading} />
+                            <MetricCard label="Stress" value={Math.round(metrics.stress)} unit="/100" icon="fa-wave-square" color="border-indigo-500" isLoading={isInitialLoading} />
                         </div>
 
                         {/* Sleep Panel */}
-                        <div className="glass p-6 rounded-[2rem] border-l-4 border-purple-500">
+                        <div className={`glass p-6 rounded-[2.5rem] border-l-4 border-purple-500 ${isInitialLoading ? 'shimmer opacity-50' : ''}`}>
                             <div className="flex justify-between items-center mb-6">
                                 <div>
-                                    <h3 className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Sleep Analysis</h3>
-                                    <p className="text-2xl font-black">{metrics.sleep} <span className="text-xs text-gray-500">Hrs</span></p>
+                                    <h3 className="text-[10px] font-black text-gray-500 uppercase tracking-widest mb-1">Last Sleep Cycle</h3>
+                                    <p className="text-3xl font-black tracking-tighter">{metrics.sleep} <span className="text-xs text-gray-500 font-bold">HRS</span></p>
                                 </div>
-                                <div className="text-right">
-                                    <p className="text-[10px] font-black text-gray-500 uppercase">Recovery</p>
-                                    <p className="text-lg font-bold text-purple-400">Good</p>
+                                <div className="w-12 h-12 rounded-2xl bg-purple-500/10 flex items-center justify-center">
+                                    <i className="fa-solid fa-moon text-purple-400 text-xl"></i>
                                 </div>
                             </div>
-                            <div className="h-3 w-full bg-white/5 rounded-full overflow-hidden flex">
-                                <div className="h-full bg-purple-600 w-[25%]"></div>
-                                <div className="h-full bg-blue-500 w-[45%]"></div>
-                                <div className="h-full bg-blue-300 w-[30%]"></div>
+                            <div className="h-2 w-full bg-white/5 rounded-full overflow-hidden flex gap-1">
+                                <div className="h-full bg-purple-600 w-1/4 rounded-full"></div>
+                                <div className="h-full bg-blue-500 w-1/2 rounded-full"></div>
+                                <div className="h-full bg-blue-300 w-1/4 rounded-full"></div>
                             </div>
                         </div>
 
-                        {/* Gemini Insights Section */}
-                        <div className="glass p-6 rounded-[2rem] border-t-2 border-blue-500/20 shadow-2xl">
-                            <div className="flex items-center gap-2 mb-4">
-                                <i className="fa-solid fa-sparkles text-blue-400"></i>
-                                <h3 className="text-sm font-black uppercase tracking-tight">AI Insights</h3>
+                        {/* AI Section */}
+                        <div className={`glass ai-border p-6 rounded-[2.5rem] shadow-2xl transition-all duration-700 ${isInitialLoading ? 'opacity-30 scale-95' : 'opacity-100'}`}>
+                            <div className="flex items-center gap-2 mb-3">
+                                <div className="w-6 h-6 rounded-lg bg-blue-500/20 flex items-center justify-center">
+                                    <i className="fa-solid fa-sparkles text-blue-400 text-[10px]"></i>
+                                </div>
+                                <h3 className="text-[10px] font-black uppercase tracking-widest text-blue-300">Live AI Analysis</h3>
                             </div>
-                            <p className="text-xs text-gray-400 leading-relaxed italic">
-                                "Your Galaxy Watch 7 detected a consistent heart rate variability. Recommendations: Maintain hydration and prioritize a 15-minute cool-down after your next session."
-                            </p>
+                            <div className={`transition-all duration-300 ${isAiGenerating ? 'blur-sm' : ''}`}>
+                                <p className="text-xs text-gray-300 leading-relaxed font-medium">
+                                    "{aiInsight}"
+                                </p>
+                            </div>
+                            {isAiGenerating && (
+                                <div className="mt-3 flex gap-1">
+                                    <div className="w-1 h-1 bg-blue-500 rounded-full animate-bounce"></div>
+                                    <div className="w-1 h-1 bg-blue-500 rounded-full animate-bounce [animation-delay:-0.15s]"></div>
+                                    <div className="w-1 h-1 bg-blue-500 rounded-full animate-bounce [animation-delay:-0.3s]"></div>
+                                </div>
+                            )}
                         </div>
                     </main>
 
-                    {/* Install Banner */}
-                    {deferredPrompt && (
-                        <div className="fixed bottom-28 left-4 right-4 z-[100] animate-bounce-in">
-                            <div className="bg-blue-600 rounded-3xl p-5 flex items-center justify-between shadow-2xl">
-                                <div className="flex items-center gap-3">
-                                    <div className="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center text-white">
-                                        <i className="fa-solid fa-mobile-screen-button"></i>
-                                    </div>
-                                    <p className="text-white font-bold text-xs uppercase">Install to Watch Hub</p>
-                                </div>
-                                <button onClick={installApp} className="bg-white text-blue-600 px-5 py-2.5 rounded-2xl text-[10px] font-black uppercase">Add</button>
-                            </div>
-                        </div>
-                    )}
-
-                    {/* Tab Bar */}
-                    <nav className="fixed bottom-0 left-0 right-0 bg-black/90 backdrop-blur-3xl border-t border-white/5 p-4 pb-10 z-50">
+                    {/* Bottom Dock */}
+                    <nav className="fixed bottom-0 left-0 right-0 bg-black/80 backdrop-blur-3xl border-t border-white/5 p-4 pb-10 z-50">
                         <div className="flex items-center justify-between gap-4 max-w-md mx-auto">
-                            <button onClick={() => setIsLive(!isLive)} className={`flex flex-col items-center gap-1 ${isLive ? 'text-blue-500' : 'text-gray-600'}`}>
-                                <i className={`fa-solid ${isLive ? 'fa-tower-broadcast' : 'fa-pause'} text-xl`}></i>
-                                <span className="text-[8px] font-black uppercase tracking-widest">{isLive ? 'Live' : 'Paused'}</span>
+                            <button onClick={() => setIsLive(!isLive)} className={`w-14 h-14 rounded-2xl flex flex-col items-center justify-center transition-all ${isLive ? 'text-blue-500 bg-blue-500/5' : 'text-gray-600 bg-white/5'}`}>
+                                <i className={`fa-solid ${isLive ? 'fa-tower-broadcast' : 'fa-pause'} text-xl mb-1`}></i>
+                                <span className="text-[8px] font-black uppercase">{isLive ? 'Live' : 'Off'}</span>
                             </button>
                             
                             <button 
                                 onClick={handlePush}
-                                disabled={status !== 'IDLE'}
-                                className={`flex-1 h-14 rounded-2xl font-black uppercase tracking-widest flex items-center justify-center gap-2 transition-all active:scale-95 shadow-lg shadow-blue-900/20
-                                    ${status === 'IDLE' ? 'bg-blue-600 text-white' : 'bg-gray-800 text-gray-500'}
+                                disabled={status !== 'IDLE' || isInitialLoading}
+                                className={`flex-1 h-14 rounded-2xl font-black uppercase tracking-widest flex items-center justify-center gap-3 transition-all active:scale-95 shadow-xl
+                                    ${(status === 'IDLE' && !isInitialLoading) ? 'bg-blue-600 text-white' : 'bg-white/5 text-gray-500'}
                                 `}
                             >
                                 {status === 'IDLE' ? (
-                                    <><i className="fa-solid fa-cloud-arrow-up"></i><span>Push Data</span></>
+                                    isInitialLoading ? (
+                                        <><i className="fa-solid fa-satellite-dish animate-pulse"></i><span>Syncing</span></>
+                                    ) : (
+                                        <><i className="fa-solid fa-cloud-arrow-up"></i><span>Push Data</span></>
+                                    )
                                 ) : (
                                     <><i className="fa-solid fa-circle-notch animate-spin"></i><span>{status}</span></>
                                 )}
                             </button>
                         </div>
                     </nav>
+
+                    {/* Install Overlay */}
+                    {deferredPrompt && (
+                        <div className="fixed bottom-28 left-4 right-4 z-[100] animate-bounce-in">
+                            <div className="bg-blue-600 rounded-[2rem] p-5 flex items-center justify-between shadow-2xl border border-white/10">
+                                <div className="flex items-center gap-4">
+                                    <div className="w-10 h-10 bg-white/10 rounded-xl flex items-center justify-center text-white">
+                                        <i className="fa-solid fa-mobile-button"></i>
+                                    </div>
+                                    <p className="text-white font-black text-[10px] uppercase tracking-widest">Install for LTE Alerts</p>
+                                </div>
+                                <button onClick={installApp} className="bg-white text-blue-600 px-6 py-3 rounded-2xl text-[10px] font-black uppercase tracking-tighter">Install</button>
+                            </div>
+                        </div>
+                    )}
                 </div>
             );
         };
@@ -220,12 +284,10 @@
         const root = ReactDOM.createRoot(document.getElementById('root'));
         root.render(<App />);
 
-        // Register Service Worker
+        // Register SW
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', () => {
-                navigator.serviceWorker.register('./sw.js')
-                    .then(() => console.log('PWA Ready'))
-                    .catch(err => console.error('PWA Fail', err));
+                navigator.serviceWorker.register('./sw.js').catch(() => {});
             });
         }
     </script>

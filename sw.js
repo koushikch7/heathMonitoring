@@ -1,5 +1,5 @@
 
-const CACHE_NAME = 'health-v6';
+const CACHE_NAME = 'health-v7-final';
 const ASSETS = ['./', './index.html', './manifest.json'];
 
 self.addEventListener('install', (e) => {
