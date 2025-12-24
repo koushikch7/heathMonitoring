@@ -10,47 +10,31 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <title>HealthBridge AI</title>
     
-    <!-- External Dependencies -->
+    <!-- CSS & Fonts -->
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;700;900&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;900&display=swap" rel="stylesheet">
     
-    <!-- React & Babel Standalone -->
+    <!-- React & Babel for In-Browser Transpilation -->
     <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-    
+
     <style>
-        body {
-            font-family: 'Inter', sans-serif;
-            background-color: #050505;
-            color: #ffffff;
-            overscroll-behavior-y: contain;
-            margin: 0;
-        }
-        .glass-panel {
-            background: rgba(255, 255, 255, 0.02);
-            backdrop-filter: blur(16px);
-            border: 1px solid rgba(255, 255, 255, 0.05);
-        }
-        .metric-glow-blue { box-shadow: 0 0 30px rgba(37, 99, 235, 0.2); }
-        .custom-scrollbar::-webkit-scrollbar { width: 4px; }
-        .custom-scrollbar::-webkit-scrollbar-thumb { background: #222; border-radius: 10px; }
-        @keyframes pulse-ring { 0% { transform: scale(.33); opacity: 1; } 80%, 100% { opacity: 0; } }
-        .pulse-dot::before {
-            content: ''; position: absolute; width: 300%; height: 300%; border-radius: 50%;
-            background-color: #22c55e; animation: pulse-ring 1.5s ease-out infinite;
-        }
-        @keyframes bounce-in { 0% { transform: translateY(100px); opacity: 0; } 100% { transform: translateY(0); opacity: 1; } }
-        .animate-bounce-in { animation: bounce-in 0.4s ease-out forwards; }
+        body { font-family: 'Inter', sans-serif; background-color: #050505; color: #fff; margin: 0; overscroll-behavior-y: contain; }
+        .glass { background: rgba(255, 255, 255, 0.03); backdrop-filter: blur(12px); border: 1px solid rgba(255, 255, 255, 0.08); }
+        .metric-glow { box-shadow: 0 0 40px rgba(37, 99, 235, 0.15); }
+        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
+        .pulse { animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite; }
+        .custom-scroll::-webkit-scrollbar { width: 3px; }
+        .custom-scroll::-webkit-scrollbar-thumb { background: #333; border-radius: 10px; }
     </style>
 <script type="importmap">
 {
   "imports": {
-    "react-dom/": "https://esm.sh/react-dom@^19.2.3/",
     "@google/genai": "https://esm.sh/@google/genai@^1.34.0",
-    "react/": "https://esm.sh/react@^19.2.3/",
-    "react": "https://esm.sh/react@^19.2.3"
+    "react": "https://esm.sh/react@^19.2.3",
+    "react/": "https://esm.sh/react@^19.2.3/"
   }
 }
 </script>
@@ -58,168 +42,173 @@
 <body>
     <div id="root"></div>
 
-    <!-- Application Code -->
     <script type="text/babel">
-        // Mocking the GenAI SDK for single-file deployment
-        const API_KEY = ""; // Placeholder, will use process.env.API_KEY if available
+        const { useState, useEffect, useCallback, useRef } = React;
 
         // --- COMPONENTS ---
-        const MetricCard = ({ label, value, unit, icon, colorClass, children }) => (
-            <div className={`glass-panel p-5 rounded-2xl flex flex-col justify-between transition-all hover:scale-[1.02] border-l-4 ${colorClass}`}>
+        const MetricCard = ({ label, value, unit, icon, color, trend }) => (
+            <div className={`glass p-5 rounded-3xl border-l-4 ${color} transition-all active:scale-95`}>
                 <div className="flex justify-between items-start mb-4">
-                    <span className="text-gray-400 text-[10px] font-bold uppercase tracking-widest">{label}</span>
-                    <i className={`fa-solid ${icon} text-lg opacity-60`}></i>
+                    <span className="text-gray-500 text-[10px] font-black uppercase tracking-widest">{label}</span>
+                    <i className={`fa-solid ${icon} text-lg opacity-40`}></i>
                 </div>
                 <div className="flex items-baseline gap-1">
-                    <span className="text-2xl font-black tracking-tighter">{value}</span>
+                    <span className="text-3xl font-black tracking-tighter">{value}</span>
                     <span className="text-gray-500 text-[10px] font-bold uppercase">{unit}</span>
                 </div>
-                {children && <div className="mt-4">{children}</div>}
+                {trend && (
+                    <div className="mt-2 text-[10px] font-bold text-green-500 flex items-center gap-1">
+                        <i className="fa-solid fa-arrow-trend-up"></i>
+                        <span>OPTIMAL</span>
+                    </div>
+                )}
             </div>
         );
 
-        // --- APP LOGIC ---
+        // --- APP ---
         const App = () => {
-            const [metrics, setMetrics] = React.useState({
+            const [metrics, setMetrics] = useState({
                 heartRate: 72,
-                bloodOxygen: 98,
+                spO2: 98,
                 steps: 8432,
-                sleepHours: 7.2,
-                sleepScore: 88,
-                stressLevel: 25,
+                stress: 24,
+                sleep: 7.2,
                 timestamp: new Date().toLocaleTimeString()
             });
+            const [isLive, setIsLive] = useState(true);
+            const [status, setStatus] = useState('IDLE');
+            const [deferredPrompt, setDeferredPrompt] = useState(null);
 
-            const [syncStatus, setSyncStatus] = React.useState('IDLE');
-            const [isLive, setIsLive] = React.useState(true);
-            const [deferredPrompt, setDeferredPrompt] = React.useState(null);
-            const [showInstallBanner, setShowInstallBanner] = React.useState(false);
-
-            React.useEffect(() => {
-                const handler = (e) => {
-                    e.preventDefault();
-                    setDeferredPrompt(e);
-                    setShowInstallBanner(true);
-                };
-                window.addEventListener('beforeinstallprompt', handler);
-                return () => window.removeEventListener('beforeinstallprompt', handler);
-            }, []);
-
-            React.useEffect(() => {
+            // Simulation logic
+            useEffect(() => {
                 if (!isLive) return;
-                const interval = setInterval(() => {
+                const timer = setInterval(() => {
                     setMetrics(prev => ({
                         ...prev,
-                        heartRate: 65 + Math.floor(Math.random() * 20),
-                        stressLevel: Math.max(10, Math.min(90, prev.stressLevel + (Math.random() - 0.5) * 5)),
+                        heartRate: 60 + Math.floor(Math.random() * 25),
+                        stress: Math.max(10, Math.min(90, prev.stress + (Math.random() - 0.5) * 4)),
                         timestamp: new Date().toLocaleTimeString()
                     }));
-                }, 4000);
-                return () => clearInterval(interval);
+                }, 3000);
+                return () => clearInterval(timer);
             }, [isLive]);
 
-            const handleSync = async () => {
-                setSyncStatus('SYNCING');
+            // PWA Installation handling
+            useEffect(() => {
+                window.addEventListener('beforeinstallprompt', (e) => {
+                    e.preventDefault();
+                    setDeferredPrompt(e);
+                });
+            }, []);
+
+            const handlePush = async () => {
+                setStatus('SYNCING');
                 await new Promise(r => setTimeout(r, 1500));
-                setSyncStatus('SUCCESS');
-                setTimeout(() => setSyncStatus('IDLE'), 2000);
+                setStatus('ANALYZING');
+                await new Promise(r => setTimeout(r, 1000));
+                setStatus('SUCCESS');
+                setTimeout(() => setStatus('IDLE'), 2000);
             };
 
             const installApp = async () => {
-                if (!deferredPrompt) {
-                    alert("To install, tap the 3-dots menu in Chrome and select 'Add to Home Screen'");
-                    return;
-                }
+                if (!deferredPrompt) return;
                 deferredPrompt.prompt();
                 const { outcome } = await deferredPrompt.userChoice;
-                if (outcome === 'accepted') {
-                    setDeferredPrompt(null);
-                    setShowInstallBanner(false);
-                }
+                if (outcome === 'accepted') setDeferredPrompt(null);
             };
 
             return (
-                <div className="min-h-screen flex flex-col max-w-lg mx-auto bg-[#050505]">
-                    <header className="p-5 border-b border-white/5 flex items-center justify-between sticky top-0 bg-black/50 backdrop-blur-xl z-50">
+                <div className="min-h-screen flex flex-col max-w-md mx-auto relative overflow-hidden">
+                    {/* Header */}
+                    <header className="p-6 flex items-center justify-between sticky top-0 bg-black/60 backdrop-blur-2xl z-50 border-b border-white/5">
                         <div className="flex items-center gap-3">
-                            <div className="w-10 h-10 bg-blue-600 rounded-2xl flex items-center justify-center metric-glow-blue">
+                            <div className="w-10 h-10 bg-blue-600 rounded-2xl flex items-center justify-center metric-glow">
                                 <i className="fa-solid fa-bolt-lightning text-white"></i>
                             </div>
                             <div>
-                                <h1 className="text-lg font-black tracking-tight">HealthBridge</h1>
+                                <h1 className="text-lg font-black tracking-tighter">HealthBridge</h1>
                                 <div className="flex items-center gap-1.5">
-                                    <div className="w-1.5 h-1.5 rounded-full bg-green-500 pulse-dot relative"></div>
-                                    <span className="text-[9px] text-gray-500 font-bold uppercase tracking-widest">Watch Active</span>
+                                    <div className="w-1.5 h-1.5 bg-green-500 rounded-full pulse"></div>
+                                    <span className="text-[9px] font-bold text-gray-500 uppercase tracking-widest">LTE Connected</span>
                                 </div>
                             </div>
                         </div>
                     </header>
 
-                    <main className="flex-1 p-4 space-y-4 mb-24">
+                    {/* Main Content */}
+                    <main className="flex-1 p-5 space-y-4 pb-32 overflow-y-auto custom-scroll">
                         <div className="grid grid-cols-2 gap-3">
-                            <MetricCard label="Heart" value={metrics.heartRate} unit="BPM" icon="fa-heart-pulse" colorClass="border-red-500" />
-                            <MetricCard label="Oxygen" value={metrics.bloodOxygen} unit="%" icon="fa-droplet" colorClass="border-blue-400" />
-                            <MetricCard label="Activity" value={metrics.steps.toLocaleString()} unit="Steps" icon="fa-person-running" colorClass="border-orange-500" />
-                            <MetricCard label="Stress" value={Math.round(metrics.stressLevel)} unit="/100" icon="fa-brain" colorClass="border-cyan-500" />
+                            <MetricCard label="Heart" value={metrics.heartRate} unit="BPM" icon="fa-heart-pulse" color="border-red-500" trend />
+                            <MetricCard label="Oxygen" value={metrics.spO2} unit="%" icon="fa-droplet" color="border-blue-400" />
+                            <MetricCard label="Activity" value={metrics.steps.toLocaleString()} unit="Steps" icon="fa-fire" color="border-orange-500" />
+                            <MetricCard label="Stress" value={Math.round(metrics.stress)} unit="/100" icon="fa-brain" color="border-cyan-500" />
                         </div>
 
-                        <MetricCard label="Sleep Tracking" value={metrics.sleepHours} unit="Hours" icon="fa-moon" colorClass="border-purple-500">
-                            <div className="mt-2 space-y-3">
-                                <div className="flex justify-between items-end">
-                                    <span className="text-[10px] text-gray-500 font-bold uppercase">Efficiency</span>
-                                    <span className="text-sm font-bold text-white">{metrics.sleepScore}%</span>
+                        {/* Sleep Panel */}
+                        <div className="glass p-6 rounded-[2rem] border-l-4 border-purple-500">
+                            <div className="flex justify-between items-center mb-6">
+                                <div>
+                                    <h3 className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Sleep Analysis</h3>
+                                    <p className="text-2xl font-black">{metrics.sleep} <span className="text-xs text-gray-500">Hrs</span></p>
                                 </div>
-                                <div className="h-2 w-full bg-white/5 rounded-full overflow-hidden">
-                                    <div className="h-full bg-purple-600 w-[88%]"></div>
+                                <div className="text-right">
+                                    <p className="text-[10px] font-black text-gray-500 uppercase">Recovery</p>
+                                    <p className="text-lg font-bold text-purple-400">Good</p>
                                 </div>
                             </div>
-                        </MetricCard>
+                            <div className="h-3 w-full bg-white/5 rounded-full overflow-hidden flex">
+                                <div className="h-full bg-purple-600 w-[25%]"></div>
+                                <div className="h-full bg-blue-500 w-[45%]"></div>
+                                <div className="h-full bg-blue-300 w-[30%]"></div>
+                            </div>
+                        </div>
 
-                        <div className="glass-panel p-6 rounded-3xl border-t border-blue-500/30">
-                            <div className="flex items-center gap-2 mb-3">
+                        {/* Gemini Insights Section */}
+                        <div className="glass p-6 rounded-[2rem] border-t-2 border-blue-500/20 shadow-2xl">
+                            <div className="flex items-center gap-2 mb-4">
                                 <i className="fa-solid fa-sparkles text-blue-400"></i>
-                                <h3 className="font-black text-sm uppercase">AI Insight</h3>
+                                <h3 className="text-sm font-black uppercase tracking-tight">AI Insights</h3>
                             </div>
-                            <p className="text-xs text-gray-400 leading-relaxed">
-                                Your heart rate recovery is optimal today. Based on your stress levels trending down, this is a great window for a high-intensity workout.
+                            <p className="text-xs text-gray-400 leading-relaxed italic">
+                                "Your Galaxy Watch 7 detected a consistent heart rate variability. Recommendations: Maintain hydration and prioritize a 15-minute cool-down after your next session."
                             </p>
                         </div>
                     </main>
 
-                    {showInstallBanner && (
-                        <div className="fixed bottom-24 left-4 right-4 z-[60] animate-bounce-in">
-                            <div className="bg-blue-600 rounded-2xl p-4 flex items-center justify-between shadow-2xl border border-blue-400/30">
+                    {/* Install Banner */}
+                    {deferredPrompt && (
+                        <div className="fixed bottom-28 left-4 right-4 z-[100] animate-bounce-in">
+                            <div className="bg-blue-600 rounded-3xl p-5 flex items-center justify-between shadow-2xl">
                                 <div className="flex items-center gap-3">
-                                    <div className="w-10 h-10 bg-white rounded-xl flex items-center justify-center text-blue-600">
-                                        <i className="fa-solid fa-download"></i>
+                                    <div className="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center text-white">
+                                        <i className="fa-solid fa-mobile-screen-button"></i>
                                     </div>
-                                    <div>
-                                        <h4 className="text-white font-bold text-sm">Install App</h4>
-                                        <p className="text-blue-100 text-[10px]">Access from your Home Screen</p>
-                                    </div>
+                                    <p className="text-white font-bold text-xs uppercase">Install to Watch Hub</p>
                                 </div>
-                                <button onClick={installApp} className="bg-white text-blue-600 px-4 py-2 rounded-xl text-xs font-black uppercase">Install</button>
+                                <button onClick={installApp} className="bg-white text-blue-600 px-5 py-2.5 rounded-2xl text-[10px] font-black uppercase">Add</button>
                             </div>
                         </div>
                     )}
 
-                    <nav className="fixed bottom-0 left-0 right-0 bg-black/80 backdrop-blur-2xl border-t border-white/5 p-4 pb-8 z-50">
-                        <div className="max-w-lg mx-auto flex items-center justify-between gap-4">
+                    {/* Tab Bar */}
+                    <nav className="fixed bottom-0 left-0 right-0 bg-black/90 backdrop-blur-3xl border-t border-white/5 p-4 pb-10 z-50">
+                        <div className="flex items-center justify-between gap-4 max-w-md mx-auto">
                             <button onClick={() => setIsLive(!isLive)} className={`flex flex-col items-center gap-1 ${isLive ? 'text-blue-500' : 'text-gray-600'}`}>
-                                <i className={`fa-solid ${isLive ? 'fa-bolt' : 'fa-pause'} text-xl`}></i>
-                                <span className="text-[8px] font-bold uppercase">{isLive ? 'Live' : 'Paused'}</span>
+                                <i className={`fa-solid ${isLive ? 'fa-tower-broadcast' : 'fa-pause'} text-xl`}></i>
+                                <span className="text-[8px] font-black uppercase tracking-widest">{isLive ? 'Live' : 'Paused'}</span>
                             </button>
+                            
                             <button 
-                                onClick={handleSync}
-                                disabled={syncStatus !== 'IDLE'}
-                                className={`flex-1 flex items-center justify-center gap-2 h-14 rounded-2xl font-black uppercase tracking-widest transition-all
-                                    ${syncStatus === 'IDLE' ? 'bg-blue-600 text-white active:scale-95 shadow-xl' : 'bg-gray-800 text-gray-500'}
+                                onClick={handlePush}
+                                disabled={status !== 'IDLE'}
+                                className={`flex-1 h-14 rounded-2xl font-black uppercase tracking-widest flex items-center justify-center gap-2 transition-all active:scale-95 shadow-lg shadow-blue-900/20
+                                    ${status === 'IDLE' ? 'bg-blue-600 text-white' : 'bg-gray-800 text-gray-500'}
                                 `}
                             >
-                                {syncStatus === 'IDLE' ? (
-                                    <><i className="fa-solid fa-cloud-arrow-up"></i><span>Push Metrics</span></>
+                                {status === 'IDLE' ? (
+                                    <><i className="fa-solid fa-cloud-arrow-up"></i><span>Push Data</span></>
                                 ) : (
-                                    <><i className="fa-solid fa-circle-notch animate-spin"></i><span>{syncStatus}</span></>
+                                    <><i className="fa-solid fa-circle-notch animate-spin"></i><span>{status}</span></>
                                 )}
                             </button>
                         </div>
@@ -235,8 +224,8 @@
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', () => {
                 navigator.serviceWorker.register('./sw.js')
-                    .then(reg => console.log('SW Registered'))
-                    .catch(err => console.error('SW Error', err));
+                    .then(() => console.log('PWA Ready'))
+                    .catch(err => console.error('PWA Fail', err));
             });
         }
     </script>

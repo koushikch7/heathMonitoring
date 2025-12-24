@@ -2,8 +2,8 @@
 {
   "name": "HealthBridge AI",
   "short_name": "HealthBridge",
-  "description": "Galaxy Watch 7 Health Data Bridge",
-  "start_url": "./index.html",
+  "description": "Galaxy Watch 7 Data Sync",
+  "start_url": "./",
   "display": "standalone",
   "background_color": "#050505",
   "theme_color": "#2563eb",
