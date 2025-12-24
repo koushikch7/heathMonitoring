@@ -1,15 +1,20 @@
 
-const CACHE_NAME = 'healthbridge-v3';
+const CACHE_NAME = 'healthbridge-v4';
 const ASSETS = [
-  '/',
-  '/index.html',
-  '/manifest.json'
+  './',
+  './index.html',
+  './manifest.json',
+  './index.tsx'
 ];
 
 self.addEventListener('install', (event) => {
   self.skipWaiting();
   event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => cache.addAll(ASSETS))
+    caches.open(CACHE_NAME).then((cache) => {
+      return Promise.allSettled(
+        ASSETS.map(asset => cache.add(asset))
+      );
+    })
   );
 });
 
@@ -30,8 +35,10 @@ self.addEventListener('fetch', (event) => {
     caches.match(event.request).then((cached) => {
       const networked = fetch(event.request)
         .then((response) => {
-          const cacheCopy = response.clone();
-          caches.open(CACHE_NAME).then((cache) => cache.put(event.request, cacheCopy));
+          if (response.status === 200) {
+            const cacheCopy = response.clone();
+            caches.open(CACHE_NAME).then((cache) => cache.put(event.request, cacheCopy));
+          }
           return response;
         })
         .catch(() => cached);

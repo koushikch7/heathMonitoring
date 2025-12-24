@@ -4,7 +4,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <link rel="manifest" href="/manifest.json">
+    <!-- Use relative path for manifest -->
+    <link rel="manifest" href="manifest.json">
     <meta name="theme-color" content="#050505">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -50,12 +51,15 @@
 </head>
 <body>
     <div id="root"></div>
+    <!-- CRITICAL: Load the entry point file -->
+    <script type="module" src="index.tsx"></script>
     <script>
+      // Use relative path for Service Worker registration
       if ('serviceWorker' in navigator) {
         window.addEventListener('load', () => {
-          navigator.serviceWorker.register('/sw.js')
-            .then(r => console.log('Ready'))
-            .catch(e => console.error(e));
+          navigator.serviceWorker.register('sw.js')
+            .then(r => console.log('Service Worker Registered'))
+            .catch(e => console.error('SW Registration Failed:', e));
         });
       }
     </script>
