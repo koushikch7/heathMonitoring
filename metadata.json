@@ -2,6 +2,7 @@
   "name": "Galaxy Health AI Bridge",
   "description": "A high-performance dashboard designed to sync health metrics from Galaxy Watch 7 to an AI-powered analysis server, featuring real-time data visualization and Gemini-driven health insights.",
   "requestFramePermissions": [
-    "geolocation"
+    "geolocation",
+    "bluetooth"
   ]
 }
