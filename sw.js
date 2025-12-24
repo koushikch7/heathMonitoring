@@ -1,10 +1,9 @@
 
-const CACHE_NAME = 'healthbridge-v4';
+const CACHE_NAME = 'healthbridge-v5';
 const ASSETS = [
   './',
   './index.html',
-  './manifest.json',
-  './index.tsx'
+  './manifest.json'
 ];
 
 self.addEventListener('install', (event) => {

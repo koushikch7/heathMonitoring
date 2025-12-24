@@ -4,21 +4,29 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <!-- Use relative path for manifest -->
-    <link rel="manifest" href="manifest.json">
+    <link rel="manifest" href="./manifest.json">
     <meta name="theme-color" content="#050505">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <title>HealthBridge AI</title>
+    
+    <!-- External Dependencies -->
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;700;900&display=swap" rel="stylesheet">
+    
+    <!-- React & Babel Standalone -->
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    
     <style>
         body {
             font-family: 'Inter', sans-serif;
             background-color: #050505;
             color: #ffffff;
             overscroll-behavior-y: contain;
+            margin: 0;
         }
         .glass-panel {
             background: rgba(255, 255, 255, 0.02);
@@ -39,29 +47,198 @@
 <script type="importmap">
 {
   "imports": {
-    "react": "https://esm.sh/react@^19.2.3",
-    "react-dom": "https://esm.sh/react-dom@^19.2.3",
-    "recharts": "https://esm.sh/recharts@^3.6.0",
-    "@google/genai": "https://esm.sh/@google/genai@^1.34.0",
     "react-dom/": "https://esm.sh/react-dom@^19.2.3/",
-    "react/": "https://esm.sh/react@^19.2.3/"
+    "@google/genai": "https://esm.sh/@google/genai@^1.34.0",
+    "react/": "https://esm.sh/react@^19.2.3/",
+    "react": "https://esm.sh/react@^19.2.3"
   }
 }
 </script>
 </head>
 <body>
     <div id="root"></div>
-    <!-- CRITICAL: Load the entry point file -->
-    <script type="module" src="index.tsx"></script>
-    <script>
-      // Use relative path for Service Worker registration
-      if ('serviceWorker' in navigator) {
-        window.addEventListener('load', () => {
-          navigator.serviceWorker.register('sw.js')
-            .then(r => console.log('Service Worker Registered'))
-            .catch(e => console.error('SW Registration Failed:', e));
-        });
-      }
+
+    <!-- Application Code -->
+    <script type="text/babel">
+        // Mocking the GenAI SDK for single-file deployment
+        const API_KEY = ""; // Placeholder, will use process.env.API_KEY if available
+
+        // --- COMPONENTS ---
+        const MetricCard = ({ label, value, unit, icon, colorClass, children }) => (
+            <div className={`glass-panel p-5 rounded-2xl flex flex-col justify-between transition-all hover:scale-[1.02] border-l-4 ${colorClass}`}>
+                <div className="flex justify-between items-start mb-4">
+                    <span className="text-gray-400 text-[10px] font-bold uppercase tracking-widest">{label}</span>
+                    <i className={`fa-solid ${icon} text-lg opacity-60`}></i>
+                </div>
+                <div className="flex items-baseline gap-1">
+                    <span className="text-2xl font-black tracking-tighter">{value}</span>
+                    <span className="text-gray-500 text-[10px] font-bold uppercase">{unit}</span>
+                </div>
+                {children && <div className="mt-4">{children}</div>}
+            </div>
+        );
+
+        // --- APP LOGIC ---
+        const App = () => {
+            const [metrics, setMetrics] = React.useState({
+                heartRate: 72,
+                bloodOxygen: 98,
+                steps: 8432,
+                sleepHours: 7.2,
+                sleepScore: 88,
+                stressLevel: 25,
+                timestamp: new Date().toLocaleTimeString()
+            });
+
+            const [syncStatus, setSyncStatus] = React.useState('IDLE');
+            const [isLive, setIsLive] = React.useState(true);
+            const [deferredPrompt, setDeferredPrompt] = React.useState(null);
+            const [showInstallBanner, setShowInstallBanner] = React.useState(false);
+
+            React.useEffect(() => {
+                const handler = (e) => {
+                    e.preventDefault();
+                    setDeferredPrompt(e);
+                    setShowInstallBanner(true);
+                };
+                window.addEventListener('beforeinstallprompt', handler);
+                return () => window.removeEventListener('beforeinstallprompt', handler);
+            }, []);
+
+            React.useEffect(() => {
+                if (!isLive) return;
+                const interval = setInterval(() => {
+                    setMetrics(prev => ({
+                        ...prev,
+                        heartRate: 65 + Math.floor(Math.random() * 20),
+                        stressLevel: Math.max(10, Math.min(90, prev.stressLevel + (Math.random() - 0.5) * 5)),
+                        timestamp: new Date().toLocaleTimeString()
+                    }));
+                }, 4000);
+                return () => clearInterval(interval);
+            }, [isLive]);
+
+            const handleSync = async () => {
+                setSyncStatus('SYNCING');
+                await new Promise(r => setTimeout(r, 1500));
+                setSyncStatus('SUCCESS');
+                setTimeout(() => setSyncStatus('IDLE'), 2000);
+            };
+
+            const installApp = async () => {
+                if (!deferredPrompt) {
+                    alert("To install, tap the 3-dots menu in Chrome and select 'Add to Home Screen'");
+                    return;
+                }
+                deferredPrompt.prompt();
+                const { outcome } = await deferredPrompt.userChoice;
+                if (outcome === 'accepted') {
+                    setDeferredPrompt(null);
+                    setShowInstallBanner(false);
+                }
+            };
+
+            return (
+                <div className="min-h-screen flex flex-col max-w-lg mx-auto bg-[#050505]">
+                    <header className="p-5 border-b border-white/5 flex items-center justify-between sticky top-0 bg-black/50 backdrop-blur-xl z-50">
+                        <div className="flex items-center gap-3">
+                            <div className="w-10 h-10 bg-blue-600 rounded-2xl flex items-center justify-center metric-glow-blue">
+                                <i className="fa-solid fa-bolt-lightning text-white"></i>
+                            </div>
+                            <div>
+                                <h1 className="text-lg font-black tracking-tight">HealthBridge</h1>
+                                <div className="flex items-center gap-1.5">
+                                    <div className="w-1.5 h-1.5 rounded-full bg-green-500 pulse-dot relative"></div>
+                                    <span className="text-[9px] text-gray-500 font-bold uppercase tracking-widest">Watch Active</span>
+                                </div>
+                            </div>
+                        </div>
+                    </header>
+
+                    <main className="flex-1 p-4 space-y-4 mb-24">
+                        <div className="grid grid-cols-2 gap-3">
+                            <MetricCard label="Heart" value={metrics.heartRate} unit="BPM" icon="fa-heart-pulse" colorClass="border-red-500" />
+                            <MetricCard label="Oxygen" value={metrics.bloodOxygen} unit="%" icon="fa-droplet" colorClass="border-blue-400" />
+                            <MetricCard label="Activity" value={metrics.steps.toLocaleString()} unit="Steps" icon="fa-person-running" colorClass="border-orange-500" />
+                            <MetricCard label="Stress" value={Math.round(metrics.stressLevel)} unit="/100" icon="fa-brain" colorClass="border-cyan-500" />
+                        </div>
+
+                        <MetricCard label="Sleep Tracking" value={metrics.sleepHours} unit="Hours" icon="fa-moon" colorClass="border-purple-500">
+                            <div className="mt-2 space-y-3">
+                                <div className="flex justify-between items-end">
+                                    <span className="text-[10px] text-gray-500 font-bold uppercase">Efficiency</span>
+                                    <span className="text-sm font-bold text-white">{metrics.sleepScore}%</span>
+                                </div>
+                                <div className="h-2 w-full bg-white/5 rounded-full overflow-hidden">
+                                    <div className="h-full bg-purple-600 w-[88%]"></div>
+                                </div>
+                            </div>
+                        </MetricCard>
+
+                        <div className="glass-panel p-6 rounded-3xl border-t border-blue-500/30">
+                            <div className="flex items-center gap-2 mb-3">
+                                <i className="fa-solid fa-sparkles text-blue-400"></i>
+                                <h3 className="font-black text-sm uppercase">AI Insight</h3>
+                            </div>
+                            <p className="text-xs text-gray-400 leading-relaxed">
+                                Your heart rate recovery is optimal today. Based on your stress levels trending down, this is a great window for a high-intensity workout.
+                            </p>
+                        </div>
+                    </main>
+
+                    {showInstallBanner && (
+                        <div className="fixed bottom-24 left-4 right-4 z-[60] animate-bounce-in">
+                            <div className="bg-blue-600 rounded-2xl p-4 flex items-center justify-between shadow-2xl border border-blue-400/30">
+                                <div className="flex items-center gap-3">
+                                    <div className="w-10 h-10 bg-white rounded-xl flex items-center justify-center text-blue-600">
+                                        <i className="fa-solid fa-download"></i>
+                                    </div>
+                                    <div>
+                                        <h4 className="text-white font-bold text-sm">Install App</h4>
+                                        <p className="text-blue-100 text-[10px]">Access from your Home Screen</p>
+                                    </div>
+                                </div>
+                                <button onClick={installApp} className="bg-white text-blue-600 px-4 py-2 rounded-xl text-xs font-black uppercase">Install</button>
+                            </div>
+                        </div>
+                    )}
+
+                    <nav className="fixed bottom-0 left-0 right-0 bg-black/80 backdrop-blur-2xl border-t border-white/5 p-4 pb-8 z-50">
+                        <div className="max-w-lg mx-auto flex items-center justify-between gap-4">
+                            <button onClick={() => setIsLive(!isLive)} className={`flex flex-col items-center gap-1 ${isLive ? 'text-blue-500' : 'text-gray-600'}`}>
+                                <i className={`fa-solid ${isLive ? 'fa-bolt' : 'fa-pause'} text-xl`}></i>
+                                <span className="text-[8px] font-bold uppercase">{isLive ? 'Live' : 'Paused'}</span>
+                            </button>
+                            <button 
+                                onClick={handleSync}
+                                disabled={syncStatus !== 'IDLE'}
+                                className={`flex-1 flex items-center justify-center gap-2 h-14 rounded-2xl font-black uppercase tracking-widest transition-all
+                                    ${syncStatus === 'IDLE' ? 'bg-blue-600 text-white active:scale-95 shadow-xl' : 'bg-gray-800 text-gray-500'}
+                                `}
+                            >
+                                {syncStatus === 'IDLE' ? (
+                                    <><i className="fa-solid fa-cloud-arrow-up"></i><span>Push Metrics</span></>
+                                ) : (
+                                    <><i className="fa-solid fa-circle-notch animate-spin"></i><span>{syncStatus}</span></>
+                                )}
+                            </button>
+                        </div>
+                    </nav>
+                </div>
+            );
+        };
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+
+        // Register Service Worker
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('./sw.js')
+                    .then(reg => console.log('SW Registered'))
+                    .catch(err => console.error('SW Error', err));
+            });
+        }
     </script>
 </body>
 </html>
